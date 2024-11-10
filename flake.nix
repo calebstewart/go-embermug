@@ -15,7 +15,16 @@
       pname = "go-embermug";
       version = "0.0.1";
       src = ./.;
-      vendorHash = lib.fakeHash;
+      subPackages = ["./cli"];
+      vendorHash = "sha256-PXrsTF8n5rXiNxhtcmrFEGPj0j2ZZ/GyotxUmb+uRIQ=";
+      postInstall = "mv $out/bin/cli $out/bin/embermug";
+
+      meta = {
+        description = "Ember Mug Service and Waybar Custom Block";
+        homepage = "https://github.com/calebstewart/go-embermug";
+        license = lib.licenses.mit;
+        mainProgram = "embermug";
+      };
     };
     defaultPackage = self.packages.${system}.default;
 
@@ -30,5 +39,13 @@
         gotestsum
       ];
     };
-  });
+  }) // {
+    overlays.default = (final: prev: {
+      go-embermug = self.packages.default;
+    });
+
+    homeModules.default = import ./nix/home.nix {
+      inherit self;
+    };
+  };
 }
