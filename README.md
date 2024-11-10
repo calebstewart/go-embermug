@@ -19,10 +19,10 @@ module. If you use the module, you can configure the service like this:
 
 ```nix
 services.embermug = {
-  enable    = true;
-  socketPath  = "/path/to/socket"; # optional, defaults to '/tmp/embermug.sock'
+  enable        = true;
+  socketPath    = "/path/to/socket"; # optional, defaults to '/tmp/embermug.sock'
   deviceAddress = "AA:BB:CC:DD:EE:FF";
-  package     = my-embermug-pkg; # optional, defaults to package built from flake
+  package       = my-embermug-pkg; # optional, defaults to package built from flake
 };
 ```
 
