@@ -65,3 +65,5 @@ is restarted. Then, in your Waybar config, create a block like:
 
 [Ember Mug]: https://ember.com/products/ember-mug-2
 [ember-mug]: https://github.com/orlopau/ember-mug
+[TinyGO go-bluetooth]: https://github.com/tinygo-org/bluetooth
+[Waybar]: https://github.com/Alexays/Waybar
