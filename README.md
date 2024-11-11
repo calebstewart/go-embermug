@@ -13,16 +13,20 @@ The server is setup to work with SystemD Socket Activation as well. If it is inv
 activation, it will open a unix socket at the path provided by the `--socket` argument (defaults to
 `/tmp/embermug.sock`).
 
+Additionally, if the `--enable-notifications` argument is provided, then it will create a desktop
+notification when the mug reaches the stable target temperature.
+
 ## Installation (NixOS w/ Home Manager)
 This repository is a Nix Flake which exports a `homeModules.default` output which is a Home Manager
 module. If you use the module, you can configure the service like this:
 
 ```nix
 services.embermug = {
-  enable        = true;
-  socketPath    = "/path/to/socket"; # optional, defaults to '/tmp/embermug.sock'
-  deviceAddress = "AA:BB:CC:DD:EE:FF";
-  package       = my-embermug-pkg; # optional, defaults to package built from flake
+  enable              = true;
+  socketPath          = "/path/to/socket"; # optional, defaults to '/tmp/embermug.sock'
+  deviceAddress       = "AA:BB:CC:DD:EE:FF";
+  enableNotifications = true; # Enable notifications via freedesktop dbus notification interface
+  package             = my-embermug-pkg; # optional, defaults to package built from flake
 };
 ```
 
@@ -36,10 +40,10 @@ programs.waybar = {
 
   settings = [{
     "custom/embermug" = {
-      exec = config.services.embermug.waybarClientCommand;
-      format = "{icon}  {}";
-      format-icons = "";
-      return-type = "json";
+      exec             = config.services.embermug.waybarClientCommand;
+      format           = "{icon}  {}";
+      format-icons     = "";
+      return-type      = "json";
       restart-interval = 1;
     };
   }];
