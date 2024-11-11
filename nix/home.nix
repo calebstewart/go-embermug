@@ -86,7 +86,7 @@ in {
       # output an escape escaped code point, and then remove the extra
       # escape with `builtins.replaceStrings`. This is fucking stupid.
       text = builtins.replaceStrings ["\\u"] ["\u"] (builtins.toJSON {
-        "custom/ember" = {
+        "${cfg.waybar.block-name}" = {
           exec = lib.escapeShellArgs [
             (lib.getExe cfg.package)
             "waybar"
