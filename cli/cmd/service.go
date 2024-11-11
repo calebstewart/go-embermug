@@ -30,28 +30,36 @@ Clients to the socket will be sent state change updates about the ember
 mug at the given address, and can send messages to reconnect or update
 settings such as the set point temperature or device color.
 `,
-	Args: cobra.ExactArgs(1),
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		// Add command flags here
-		return viper.BindPFlags(cmd.Flags())
-	},
-	Run: commandExitWrapper(serviceEntrypoint),
+	Args: cobra.MaximumNArgs(1),
+	Run:  commandExitWrapper(serviceEntrypoint),
 }
 
 func init() {
-	serviceCommand.Flags().Bool("enable-notifications", false, "Send a desktop notification when the target temperature is reached")
+	flags := serviceCommand.Flags()
+	flags.Bool("enable-notifications", false, "Send a desktop notification when the target temperature is reached")
+	viper.BindPFlag("service.enable-notifications", flags.Lookup("enable-notifications"))
 }
 
 func serviceEntrypoint(cmd *cobra.Command, args []string) error {
 	var (
+		cfg         Config
 		ctx, cancel = signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
 		svc         *service.Service
 		listener    net.Listener
 	)
 	defer cancel()
 
-	if mac, err := bluetooth.ParseMAC(args[0]); err != nil {
-		slog.Error("Invalid device address", "Error", err)
+	if len(args) > 0 {
+		viper.Set("service.device-address", args[0])
+	}
+
+	if err := viper.Unmarshal(&cfg); err != nil {
+		slog.Error("Invalid configuration", "Error", err)
+		return err
+	}
+
+	if mac, err := bluetooth.ParseMAC(cfg.Service.DeviceAddress); err != nil {
+		slog.Error("Invalid device address", "Address", cfg.Service.DeviceAddress, "Error", err)
 		return err
 	} else {
 		svc = service.New(
@@ -75,10 +83,10 @@ func serviceEntrypoint(cmd *cobra.Command, args []string) error {
 		slog.Info("Received SystemD Activation Listener", "Addr", listener.Addr())
 	} else {
 		slog.Warn("No systemd sockets found")
-		slog.Warn("Listening on default socket path", "Path", viper.GetString("socket"))
+		slog.Warn("Listening on default socket path", "Path", cfg.SocketPath)
 
-		if l, err := net.Listen("unix", viper.GetString("socket")); err != nil {
-			slog.Error("Could not open unix socket", "Path", viper.GetString("socket"), "Error", err)
+		if l, err := net.Listen("unix", cfg.SocketPath); err != nil {
+			slog.Error("Could not open unix socket", "Path", cfg.SocketPath, "Error", err)
 			return err
 		} else {
 			listener = l
@@ -92,7 +100,7 @@ func serviceEntrypoint(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if viper.GetBool("enable-notifications") {
+	if cfg.Service.EnableNotifications {
 		// Start a client which will notify the desktop when the temp is reached
 		go notifierClient(svc.RegisterClient(ctx))
 	}

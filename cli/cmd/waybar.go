@@ -5,18 +5,220 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"text/template"
 
 	"github.com/calebstewart/go-embermug"
 	"github.com/calebstewart/go-embermug/service"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+type WaybarBlock struct {
+	Tooltip    *template.Template
+	Text       *template.Template
+	Alt        *template.Template
+	Class      *template.Template
+	Percentage PercentageSource
+}
+
+func NewWaybarBlock(cfg *WaybarBlockConfig) (*WaybarBlock, error) {
+	var (
+		block = WaybarBlock{
+			Percentage: cfg.Percentage,
+		}
+		funcs = template.FuncMap{
+			"toFahrenheit": func(t embermug.Temperature) int {
+				return int(t.Fahrenheit())
+			},
+			"toCelsius": func(t embermug.Temperature) int {
+				return int(t.Celsius())
+			},
+		}
+	)
+
+	if tooltip, err := template.New("tooltip").Funcs(funcs).Parse(cfg.ToolTip); err != nil {
+		return nil, fmt.Errorf("tooltip: %w", err)
+	} else {
+		block.Tooltip = tooltip
+	}
+
+	if text, err := template.New("text").Funcs(funcs).Parse(cfg.Text); err != nil {
+		return nil, fmt.Errorf("text: %w", err)
+	} else {
+		block.Text = text
+	}
+
+	if alt, err := template.New("alt").Funcs(funcs).Parse(cfg.Alt); err != nil {
+		return nil, fmt.Errorf("alt: %w", err)
+	} else {
+		block.Alt = alt
+	}
+
+	if class, err := template.New("class").Funcs(funcs).Parse(cfg.Class); err != nil {
+		return nil, fmt.Errorf("class: %w", err)
+	} else {
+		block.Class = class
+	}
+
+	return &block, nil
+}
+
+func (b *WaybarBlock) Render(state service.State) (map[string]interface{}, error) {
+	var (
+		result = make(map[string]interface{})
+		buffer = &strings.Builder{}
+	)
+
+	buffer.Reset()
+	if err := b.Tooltip.Execute(buffer, state); err != nil {
+		return nil, fmt.Errorf("tooltip: %w", err)
+	} else if value := buffer.String(); value != "" {
+		result["tooltip"] = value
+	}
+
+	buffer.Reset()
+	if err := b.Text.Execute(buffer, state); err != nil {
+		return nil, fmt.Errorf("text: %w", err)
+	} else if value := buffer.String(); value != "" {
+		result["text"] = value
+	}
+
+	buffer.Reset()
+	if err := b.Alt.Execute(buffer, state); err != nil {
+		return nil, fmt.Errorf("alt: %w", err)
+	} else if value := buffer.String(); value != "" {
+		result["alt"] = value
+	}
+
+	buffer.Reset()
+	if err := b.Class.Execute(buffer, state); err != nil {
+		return nil, fmt.Errorf("class: %w", err)
+	} else if value := buffer.String(); value != "" {
+		result["class"] = value
+	}
+
+	switch b.Percentage {
+	case PercentageBattery:
+		result["percentage"] = state.Battery.Charge
+	case PercentageLevel:
+		if state.HasLiquid {
+			result["percentage"] = 1
+		} else {
+			result["percentage"] = 0
+		}
+	}
+
+	return result, nil
+}
+
+type WaybarEncoder struct {
+	BlockByState      map[embermug.State]*WaybarBlock
+	DefaultBlock      *WaybarBlock
+	DisconnectedBlock *WaybarBlock
+	Encoder           *json.Encoder
+}
+
+func NewWaybarEncoder(cfg *WaybarConfig, stream io.Writer) (*WaybarEncoder, error) {
+	var (
+		encoder = &WaybarEncoder{
+			Encoder:      json.NewEncoder(stream),
+			BlockByState: make(map[embermug.State]*WaybarBlock),
+		}
+	)
+
+	if cfg.Disconnected == nil {
+		if block, err := NewWaybarBlock(&WaybarBlockConfig{
+			Text: "Disconnected",
+		}); err != nil {
+			return nil, fmt.Errorf("could not compile default disconnected block: %w", err)
+		} else {
+			encoder.DisconnectedBlock = block
+		}
+	} else if block, err := NewWaybarBlock(cfg.Disconnected); err != nil {
+		return nil, fmt.Errorf("could not compile disconnected block: %w", err)
+	} else {
+		encoder.DisconnectedBlock = block
+	}
+
+	if cfg.Default == nil {
+		if block, err := NewWaybarBlock(&WaybarBlockConfig{
+			Text: "{{ .State }}",
+			ToolTip: strings.Join([]string{
+				"Battery: {{ .Battery.Charge }}% ({{if .Battery.Charging}}charging{{else}}discharging{{end}})",
+			}, "\n"),
+		}); err != nil {
+			return nil, fmt.Errorf("could not compile default default block: %w", err)
+		} else {
+			encoder.DefaultBlock = block
+		}
+	} else if block, err := NewWaybarBlock(cfg.Default); err != nil {
+		return nil, fmt.Errorf("could not compile default block: %w", err)
+	} else {
+		encoder.DefaultBlock = block
+	}
+
+	if cfg.ByState != nil {
+		for stateName, blockConfig := range cfg.ByState {
+			if state, ok := embermug.ParseState(stateName); !ok {
+				return nil, fmt.Errorf("invalid state: %v", stateName)
+			} else if block, err := NewWaybarBlock(&blockConfig); err != nil {
+				return nil, fmt.Errorf("could not compile block: %v: %w", stateName, err)
+			} else {
+				encoder.BlockByState[state] = block
+			}
+		}
+	} else {
+		if block, err := NewWaybarBlock(&WaybarBlockConfig{
+			Text: "{{ .State }} ({{ toFahrenheit .Current }}F/{{ toFahrenheit .Target }}F)",
+			ToolTip: strings.Join([]string{
+				"Battery: {{ .Battery.Charge }}% ({{if .Battery.Charging}}charging{{else}}discharging{{end}})",
+			}, "\n"),
+		}); err != nil {
+			return nil, fmt.Errorf("could not compile default heating/cooling block: %w", err)
+		} else {
+			encoder.BlockByState[embermug.StateHeating] = block
+			encoder.BlockByState[embermug.StateCooling] = block
+		}
+
+		if block, err := NewWaybarBlock(&WaybarBlockConfig{
+			Text: "{{ .State }} ({{ toFahrenheit .Current }}F)",
+			ToolTip: strings.Join([]string{
+				"Battery: {{ .Battery.Charge }}% ({{if .Battery.Charging}}charging{{else}}discharging{{end}})",
+			}, "\n"),
+		}); err != nil {
+			return nil, fmt.Errorf("could not compile default stable block: %w", err)
+		} else {
+			encoder.BlockByState[embermug.StateStable] = block
+		}
+	}
+
+	return encoder, nil
+}
+
+func (e *WaybarEncoder) Encode(s service.State) error {
+	var block *WaybarBlock
+
+	if !s.Connected {
+		block = e.DisconnectedBlock
+	} else if b, ok := e.BlockByState[s.State]; ok {
+		block = b
+	} else {
+		block = e.DefaultBlock
+	}
+
+	if data, err := block.Render(s); err != nil {
+		return err
+	} else {
+		return e.Encoder.Encode(data)
+	}
+}
 
 var waybarCommand = cobra.Command{
 	Use:   "waybar",
@@ -43,16 +245,28 @@ Socket Activation path for the ember mug service.
 
 func waybarEntrypoint(cmd *cobra.Command, args []string) error {
 	var (
-		socketPath    = viper.GetString("socket")
+		cfg           Config
+		waybar        *WaybarEncoder
 		stateChannel  = make(chan service.State)
 		signalChannel = make(chan os.Signal, 4)
 		ctx, cancel   = signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
 	)
 	defer cancel()
 
-	conn, err := net.Dial("unix", socketPath)
+	if err := viper.Unmarshal(&cfg); err != nil {
+		slog.Error("Invalid configuration", "Error", err)
+		return err
+	}
+
+	waybar, err := NewWaybarEncoder(&cfg.Waybar, os.Stdout)
 	if err != nil {
-		slog.Error("Could not connect to socket", "Path", socketPath, "Error", err)
+		slog.Error("Could not compile waybar block definitions", "Error", err)
+		return err
+	}
+
+	conn, err := net.Dial("unix", cfg.SocketPath)
+	if err != nil {
+		slog.Error("Could not connect to socket", "Path", cfg.SocketPath, "Error", err)
 		return err
 	}
 	defer conn.Close()
@@ -85,53 +299,13 @@ mainLoop:
 			}
 		case state := <-stateChannel:
 			slog.Debug("Received updated state from server")
-			if err := writeWaybarBlock(state); err != nil {
+			if err := waybar.Encode(state); err != nil {
 				slog.Error("Could not write waybar block", "Error", err)
 			}
 		}
 	}
 
 	return nil
-}
-
-func writeWaybarBlock(state service.State) error {
-	var (
-		encoder  *json.Encoder = json.NewEncoder(os.Stdout)
-		charging string        = "charging"
-		text     string        = ""
-	)
-
-	if !state.Connected {
-		return encoder.Encode(map[string]interface{}{
-			"text": "Disconnected",
-			"tooltip": strings.Join([]string{
-				"Battery:      UNK",
-				"Target Temp:  UNK",
-				"Current Temp: UNK",
-			}, "\n"),
-		})
-	} else {
-		if state.State == embermug.StateHeating || state.State == embermug.StateCooling {
-			text = fmt.Sprintf("%v (%vF/%vF)", state.State.String(), int(state.Current.Fahrenheit()), int(state.Target.Fahrenheit()))
-		} else if state.State == embermug.StateStable {
-			text = fmt.Sprintf("%v (%vF)", state.State.String(), int(state.Current.Fahrenheit()))
-		} else {
-			text = state.State.String()
-		}
-
-		if !state.Battery.Charging {
-			charging = "discharging"
-		}
-
-		return encoder.Encode(map[string]interface{}{
-			"text": text,
-			"tooltip": strings.Join([]string{
-				fmt.Sprintf("Battery:      %v%% (%s)", state.Battery.Charge, charging),
-				fmt.Sprintf("Target Temp:  %.2fF", state.Target.Fahrenheit()),
-				fmt.Sprintf("Current Temp: %.2fF", state.Current.Fahrenheit()),
-			}, "\n"),
-		})
-	}
 }
 
 func handleIncomingStates(ctx context.Context, conn net.Conn, stateChannel chan service.State, cancel func()) {

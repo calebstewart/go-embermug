@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
+	"github.com/adrg/xdg"
 	"github.com/phsym/console-slog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -18,13 +21,41 @@ var rootCmd = cobra.Command{
 	},
 }
 
+var cfgFile string
+
+func initConfig() {
+	if cfgFile != "" {
+		slog.Info("Using configuration file", "Path", cfgFile)
+		viper.SetConfigFile(cfgFile)
+	} else if cfgFile, err := xdg.ConfigFile("embermug/config.toml"); err == nil {
+		slog.Info("Using configuration file", "Path", cfgFile)
+		viper.SetConfigFile(cfgFile)
+	}
+
+	viper.SetConfigType("toml")
+	viper.SetEnvPrefix("EMBER")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "__"))
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err != nil {
+		panic(fmt.Errorf("fatal error while reading config file: %w", err))
+	}
+}
+
 func init() {
 	rootCmd.AddCommand(&serviceCommand)
 	rootCmd.AddCommand(&waybarCommand)
 
-	rootCmd.PersistentFlags().String("log-level", "info", "Minimum Log Level to Show")
-	rootCmd.PersistentFlags().String("socket", "/run/embermug.sock", "Default socket path")
-	viper.BindPFlags(rootCmd.PersistentFlags())
+	cobra.OnInitialize(initConfig)
+
+	flags := rootCmd.PersistentFlags()
+	flags.StringVar(&cfgFile, "config", "", "config file (default: $XDG_CONFIG_HOME/embermug/config.toml)")
+
+	flags.String("log-level", "info", "Minimum Log Level to Show")
+	viper.BindPFlag("log-level", flags.Lookup("log-level"))
+
+	flags.String("socket", "/run/embermug.sock", "Default socket path")
+	viper.BindPFlag("socket-path", flags.Lookup("socket"))
 }
 
 func configureLogging() error {

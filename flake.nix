@@ -16,7 +16,7 @@
       version = "0.0.1";
       src = ./.;
       subPackages = ["./cli"];
-      vendorHash = "sha256-AVJ3h3w64sRVHZSgiiCDVlQNqWzZrXEIEmFd/xASihU=";
+      vendorHash = "sha256-RLE7ooj6RfFWKwHu08DGfXhfbVkR75FcHNq3z78oW8c=";
       postInstall = "mv $out/bin/cli $out/bin/embermug";
 
       meta = {

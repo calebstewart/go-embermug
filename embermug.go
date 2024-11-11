@@ -182,6 +182,7 @@ func (b *BatteryState) UnmarshalBinary(data []byte) error {
 type State int
 
 const (
+	StateInvalid State = 0
 	StateEmpty   State = 1
 	StateFilling State = 2
 	StateUnknown State = 3
@@ -191,7 +192,8 @@ const (
 )
 
 var (
-	stateNameMap = map[State]string{
+	ErrInvalidState = errors.New("unknown state name")
+	stateNameMap    = map[State]string{
 		StateEmpty:   "empty",
 		StateFilling: "filling",
 		StateUnknown: "unknown",
@@ -200,6 +202,15 @@ var (
 		StateStable:  "stable",
 	}
 )
+
+func ParseState(name string) (State, bool) {
+	for state, stateName := range stateNameMap {
+		if stateName == name {
+			return state, true
+		}
+	}
+	return StateInvalid, false
+}
 
 func (s State) String() string {
 	if v, ok := stateNameMap[s]; ok {

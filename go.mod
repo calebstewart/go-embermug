@@ -3,6 +3,7 @@ module github.com/calebstewart/go-embermug
 go 1.23.2
 
 require (
+	github.com/adrg/xdg v0.5.3
 	github.com/coreos/go-systemd/v22 v22.3.2
 	github.com/esiqveland/notify v0.13.3
 	github.com/godbus/dbus/v5 v5.1.0
@@ -38,7 +39,7 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
