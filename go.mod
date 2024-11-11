@@ -4,6 +4,8 @@ go 1.23.2
 
 require (
 	github.com/coreos/go-systemd/v22 v22.3.2
+	github.com/esiqveland/notify v0.13.3
+	github.com/godbus/dbus/v5 v5.1.0
 	github.com/google/uuid v1.4.0
 	github.com/phsym/console-slog v0.3.1
 	github.com/spf13/cobra v1.8.1
@@ -15,7 +17,6 @@ require (
 require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
-	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect

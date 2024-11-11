@@ -308,14 +308,14 @@ func (s *Service) dispatchState(state State) {
 	}
 }
 
-// registerClient creates a new state channel, and registers it with the
+// RegisterClient creates a new state channel, and registers it with the
 // service. The returned client object can be used to receive state
 // objects whenever the target ember mug changes state. When the client
 // is no longer needed, the [Client.Cancel] function can be called to
 // deregister the client. [Client.Context] will be a child of the
 // given context, and will be closed either when the parent closes
 // or when the client is canceled.
-func (s *Service) registerClient(ctx context.Context) *Client {
+func (s *Service) RegisterClient(ctx context.Context) *Client {
 	ctx, cancel := context.WithCancel(ctx)
 
 	var (
@@ -345,7 +345,7 @@ func (s *Service) registerClient(ctx context.Context) *Client {
 func (s *Service) handleClient(ctx context.Context, conn net.Conn) {
 	var (
 		group       = sync.WaitGroup{}
-		client      = s.registerClient(ctx)
+		client      = s.RegisterClient(ctx)
 		messageChan = make(chan Message)
 		encoder     = json.NewEncoder(conn)
 		logger      = slog.With(slog.String("ClientID", client.ID))

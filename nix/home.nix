@@ -4,6 +4,7 @@ let
 in {
   options.services.embermug = {
     enable = lib.mkEnableOption "Ember Mug SystemD Service";
+    enableNotifications = lib.mkEnableOption "Send Desktop Notifications when reaching ideal temperature";
 
     socketPath = lib.mkOption {
       description = "Path of the Unix Domain Socket listener";
@@ -52,12 +53,12 @@ in {
 
       Service = {
         Type = "simple";
-        ExecStart = lib.escapeShellArgs [
+        ExecStart = lib.escapeShellArgs ([
           (lib.getExe cfg.package)
           "service"
           "--socket" cfg.socketPath
           cfg.deviceAddress
-        ];
+        ] ++ (lib.lists.optional cfg.enableNotifications "--enable-notifications"));
       };
 
       Install = {
