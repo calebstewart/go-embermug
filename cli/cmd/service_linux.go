@@ -38,6 +38,8 @@ func init() {
 	flags := serviceCommand.Flags()
 	flags.Bool("enable-notifications", false, "Send a desktop notification when the target temperature is reached")
 	viper.BindPFlag("service.enable-notifications", flags.Lookup("enable-notifications"))
+
+	rootCmd.AddCommand(&serviceCommand)
 }
 
 func serviceEntrypoint(cmd *cobra.Command, args []string) error {
@@ -58,18 +60,10 @@ func serviceEntrypoint(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if mac, err := bluetooth.ParseMAC(cfg.Service.DeviceAddress); err != nil {
+	if addr, err := ParseAddress(cfg.Service.DeviceAddress); err != nil {
 		slog.Error("Invalid device address", "Address", cfg.Service.DeviceAddress, "Error", err)
-		return err
 	} else {
-		svc = service.New(
-			bluetooth.DefaultAdapter,
-			bluetooth.Address{
-				MACAddress: bluetooth.MACAddress{
-					MAC: mac,
-				},
-			},
-		)
+		svc = service.New(bluetooth.DefaultAdapter, addr)
 	}
 
 	if listeners, err := activation.Listeners(); err != nil {

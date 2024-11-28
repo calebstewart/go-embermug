@@ -243,6 +243,10 @@ Socket Activation path for the ember mug service.
 	Run: commandExitWrapper(waybarEntrypoint),
 }
 
+func init() {
+	rootCmd.AddCommand(&waybarCommand)
+}
+
 func waybarEntrypoint(cmd *cobra.Command, args []string) error {
 	var (
 		cfg           Config

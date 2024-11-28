@@ -43,9 +43,6 @@ func initConfig() {
 }
 
 func init() {
-	rootCmd.AddCommand(&serviceCommand)
-	rootCmd.AddCommand(&waybarCommand)
-
 	cobra.OnInitialize(initConfig)
 
 	flags := rootCmd.PersistentFlags()
@@ -53,9 +50,6 @@ func init() {
 
 	flags.String("log-level", "info", "Minimum Log Level to Show")
 	viper.BindPFlag("log-level", flags.Lookup("log-level"))
-
-	flags.String("socket", "/run/embermug.sock", "Default socket path")
-	viper.BindPFlag("socket-path", flags.Lookup("socket"))
 }
 
 func configureLogging() error {
